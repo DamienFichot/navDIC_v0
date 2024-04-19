@@ -9,6 +9,11 @@ properties
                         ... 'zeromean' ... Zero-mean difference
                          'normalized' ... Normalized Zero-mean difference
                          ;
+    % Estimated displacement components
+        DispComp =  'both' ... Both components
+                        ... 'X' ... 
+                        ... 'Y' ... 
+                         ;
     % Descent Algorithm
         GNAlgorithm = ... 'full' ... full Gauss-Newton
                   'modified' ... modified (assume "grad(g(x+u))=grad(f(x))") OK for small perturbations
@@ -56,6 +61,7 @@ methods
         defInputs = { ...
                         'Gauss-Newton descent algorithm [full/modified]' , this.GNAlgorithm ...
                         ; 'Image difference criterion [diff/zeromean/normalized]' , this.DiffCriterion ...
+                        ; 'Estimated displacement components [both/X/Y]' , this.DispComp ...
                         ; 'Maximum displacement update at convergence' , num2str(this.MaxDisp) ...
                         ; 'Strain regularisation parameter Beta' , num2str(this.Beta) ...
                         ; 'Maximum number of iterations' , num2str(this.MaxIt) ...
@@ -69,14 +75,15 @@ methods
         if isempty(out) ; return ; end
         this.GNAlgorithm = out{1} ;
         this.DiffCriterion = out{2} ; 
-        this.MaxDisp = str2double(out{3}) ;
-        this.Beta = str2double(out{4}) ;
-        this.MaxIt = str2double(out{5}) ;
-        this.StepRatio = str2double(out{6}) ;
-        this.InterpOrder = str2double(out{7}) ;
-        this.EdgeThickness = str2double(out{8}) ;
-        this.PointSatellites = str2double(out{9}) ;
-        this.Debug = str2double(out{10}) ;
+        this.DispComp = out{3} ; 
+        this.MaxDisp = str2double(out{4}) ;
+        this.Beta = str2double(out{5}) ;
+        this.MaxIt = str2double(out{6}) ;
+        this.StepRatio = str2double(out{7}) ;
+        this.InterpOrder = str2double(out{8}) ;
+        this.EdgeThickness = str2double(out{9}) ;
+        this.PointSatellites = str2double(out{10}) ;
+        this.Debug = str2double(out{11}) ;
     % Prepare the DIC data
         this.setupDIC(hd) ;
     end
@@ -152,9 +159,30 @@ methods
                 case 'abs' ; jr = this.Hr*(dx(:)+this.N2V*(X(:)+U(:))) ;
                 case 'rel' ; jr = this.Hr*(this.N2V*U(:)) ;
             end
+        % full H & j
+            j = j + this.Beta*jr ;
+            H = this.H + this.Beta*this.Hr*this.N2V ;
+        % Select components
+            switch this.DispComp
+                case 'both' % do nothing
+                case 'X'
+                    j = j(1:end/2) ;
+                    H = H(1:end/2,1:end/2) ;
+                case 'Y'
+                    j = j(end/2+1:end) ;
+                    H = H(end/2+1:end,end/2+1:end) ;
+            end
         % Update
-            dU = - (this.H + this.Beta*this.Hr*this.N2V) \ (j + this.Beta*jr) ;
-            U = U + reshape(dU,[],2) ;
+            du = - H \ j ; 
+            switch this.DispComp
+                case 'both' % do nothing
+                    dU = reshape(dU,[],2) ;
+                case 'X'
+                    dU = [1 0].*du ;
+                case 'Y'
+                    dU = [0 1].*du ;
+            end
+            U = U + dU ;
         % Break criterion
             it = it+1 ;
             if it>=this.MaxIt ; outFlag = 'maximum iterations reached' ; end
@@ -264,8 +292,8 @@ methods
     % Lines: create a quadrilateron from offsetted lines
         isLine = sum(Elems>0,2)==2 ;
         if any(isLine)
-            mergeAdj = false ; % merge adjacent nodes for strain regularisation ?
-            nodeNormals = false ; % offset with node normals ?
+            mergeAdj = true ; % merge adjacent nodes for strain regularisation ?
+            nodeNormals = true ; % offset with node normals ?
         % Get involved node indices and reshape the element list
             nn = Elems(isLine,1:2) ;
             Elems = Elems(~isLine,:) ; % remove line elements

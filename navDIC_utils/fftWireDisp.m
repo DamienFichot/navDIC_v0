@@ -7,7 +7,7 @@ fig = clf('reset')  ;
 
 % Parameters
     camID = 1 ;
-    frames = 1:hd.nFrames ; 20000 ;
+    frames = 1:29000 ; 20000 ;
     refFrame = 1 ;
     dimDisp = 1 ; % Dimension of the image to eval. displacements
     trunc = 10 ; % Truncation to limit high wavenumbers noise effect
@@ -51,7 +51,7 @@ fig = clf('reset')  ;
                 end
         end
         %disp([fr,pt]) ;
-        wtbr = waitbar(pt/size(IMG,2),wtbr,['Processing (',num2str(pt/size(IMG,2)*100,'%.1f'),' \%)...']) ;
+        wtbr = waitbar(pt/size(IMG,2),wtbr,['Processing (',num2str(pt/size(IMG,2)*100,'%.1f'),' %)...']) ;
     end
     delete(wtbr) ;
     U = real(1i*log(Z))*size(IMG,1)/2/pi ;
@@ -89,24 +89,25 @@ fig = clf('reset')  ;
     
     
 
+
 %% HARMONIC REGIME
     
-    Fi = 40000 ;
+    Fi = 20000 ;
     tfU = squeeze(fft(U.*WIN,[],4)) ;
     f = (0:size(tfU,2)-1)/size(tfU,2)*Fi ;
     
     fig = clf('reset')  ;
     ax = gobjects(0) ;
-    ax(1) = mysubplot(2,1,1) ;
+    ax(1) = subplot(2,1,1) ;
         plot(f,sqrt(mean(abs(tfU).^2,1)),'k') ;
             set(gca,'xscale','log','yscale','log') ;
             set(gca,'xlim',[f(2) Fi/2])
             grid on
         line = plot(f(2)*[1 1],get(gca,'ylim'),':r') ;
-    ax(2) = mysubplot(2,1,2) ;
+    ax(2) = subplot(2,1,2) ;
         pl = plot(real(tfU(:,2)),'k') ;
         
-    indX = @()closest(f,ax(1).CurrentPoint(1,1)) ;
+    indX = @()dsearchn(f(:),ax(1).CurrentPoint(1,1)) ;
     fig.WindowButtonMotionFcn = [...
             'set(line,''XData'',f(indX())*[1 1])' ...
             ,', set(pl,''YData'',real(tfU(:,indX())))'
@@ -119,7 +120,7 @@ fig = clf('reset')  ;
     FUNC = 'cos' ;
     CRITERION = 'SAMOS' ;
     compute_dK = true ;
-    indF = 2:hd.nFrames ; 10000 ;
+    indF = 2:numel(f)/2 ; hd.nFrames ; 10000 ;
     
     K = ones(length(indF),max(R0))*NaN ;
     dK = ones(length(indF),max(R0))*NaN ;
@@ -139,7 +140,7 @@ fig = clf('reset')  ;
     gammaMax = 1e-1 ;
     dKmax = 1e-4 ;
     relAmin = 1e-2 ;
-    res = 6000 ; % pix/m
+    res = 1260/.42 ; 6000 ; % pix/m
 
     F = reshape(f(indF),[],1)*ones(1,max(R0)) ;
     gamma = abs(imag(K)./real(K)) ;
@@ -154,13 +155,13 @@ fig = clf('reset')  ;
     
     fig = clf('reset') ;
         ax = gobjects(0) ;
-        ax(1) = mysubplot(2,1,1) ;
+        ax(1) = subplot(2,1,1) ;
             plot(F(valid),2*pi*F(valid)./abs(real(K(valid)))/res,'.k','tag','experimental') ;
             %scatter(F(valid),2*pi*F(valid)./abs(real(K(valid))),2,log10(abs(gamma(valid)))) ; colorbar
             set(gca,'yscale','log')
             grid on
             set(gca,'xscale','log')
-        ax(2) = mysubplot(2,1,2) ;
+        ax(2) = subplot(2,1,2) ;
             plot(F(valid),gamma(valid),'.k') ;
             set(gca,'yscale','log')
             grid on
@@ -178,9 +179,10 @@ save([path,file],'Fi','U','K')
 
 %% THEORETICAL PREDICTIONS
 
-E = 2.8e9 ;
-rho = 1150 ;
-N = 2.25 ;
+E = 2,7e9; 3.8e9 ; 5e9; 
+rho = 1150 ; 1300;
+m = 240e-3;
+N = m*9.81 ; 2.25 ;
 D = .6e-3 ;
 
 S = pi*(D/2)^2 ;
