@@ -356,7 +356,7 @@ function [valid,hd] = loadFrames(hd,dataSource,camID)
                 % Positionning
                     ratios = H.vidRes./H.fig.Position(3:4) ;
                     dimFig = imgRelSize/max(ratios)*H.vidRes ;
-                    menuSizeLeft = menuSizeLeft*max(dimFig)/dimFig(1) ;
+                    menuSizeLeft = min(.3,menuSizeLeft*max(dimFig)/dimFig(1)) ;
                 H.fig.Position = [H.fig.Position(1:2)+H.fig.Position(3:4)/2 0 0] ...
                                     + [-1/2 0 1 0]*dimFig(1)*1/(1-menuSizeLeft) ...
                                     + [0 -1/2 0 1]*dimFig(2)*1/(1-uiHeight) ;

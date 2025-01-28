@@ -176,7 +176,7 @@ methods
             du = - H \ j ; 
             switch this.DispComp
                 case 'both' % do nothing
-                    dU = reshape(dU,[],2) ;
+                    dU = reshape(du,[],2) ;
                 case 'X'
                     dU = [1 0].*du ;
                 case 'Y'
