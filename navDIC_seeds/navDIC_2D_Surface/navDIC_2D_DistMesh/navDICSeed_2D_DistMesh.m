@@ -191,7 +191,7 @@ methods
 
 % ------- GLOBAL/LOCAL COORDINATES MAPPING ------------------------------
 % Works for triangles and quadrangles only (P1)
-% (e1,e2) in [0->1]²
+% (e1,e2) in [0->1]Â²
 %               3        |          4--3
 %        TRI:   | \      |  QUAD:   |  |
 %               1--2     |          1--2
@@ -258,8 +258,8 @@ methods
     % Jacobian
         J = NaN(size(elmt,1),4) ;
         if any(isTri) 
-            J(isTri,[1 2]) =  elmtPts(isTri,:,2) - elmtPts(isTri,:,2) ; 
-            J(isTri,[3 4]) =  elmtPts(isTri,:,3) - elmtPts(isTri,:,2) ; 
+            J(isTri,[1 2]) =  elmtPts(isTri,:,2) - elmtPts(isTri,:,1) ; 
+            J(isTri,[3 4]) =  elmtPts(isTri,:,3) - elmtPts(isTri,:,1) ; 
         end
         if any(isQuad)
             J(isQuad,[1 2]) =  (1-E(isQuad,2)).*(elmtPts(isQuad,:,2)-elmtPts(isQuad,:,1)) ...
@@ -558,7 +558,7 @@ methods
         [nPoints,nCoord,nFrames] = size(obj.MovingPoints) ;
         if nargin<3 ; fr = 1:nFrames ; end
         % Init the structure
-            computeAll = isempty(obj.DataFields) || nargin<3 ;
+            computeAll = isempty(obj.DataFields) || isempty(fieldnames(obj.DataFields)) || nargin<3 ;
             DATA = struct() ;
         % REFERENCE CONFIGURATION
             if computeAll % re-determine the reference config
@@ -738,20 +738,21 @@ methods
         DATA.Length = 'Length' ; 
         DATA.L = abs(P) ;
         DATA.dL = cat(3,zeros(size(DX,1),1),diff(DATA.L,1,3)) ;
-        DATA.dLtot = cumsum(DATA.dL,3) ;
+        DATA.dLtot = cumsum(DATA.dL,3,'omitnan') ;
+        L0 = DATA.L(:,:,DATA.FirstValidFrame(1)) ;
     % Strains
         DATA.Length = 'Stretch' ; 
-        DATA.E = DATA.dLtot./DATA.L(:,1) ;
+        DATA.E = DATA.dLtot./L0 ;
         DATA.lambda = DATA.E + 1 ;
         DATA.D = DATA.dL./DATA.L ;
-        DATA.TS = cumsum(DATA.D,3) ;
+        DATA.TS = cumsum(DATA.D,3,'omitnan') ;
     % Edge Rotation
         DATA.Rotations = 'Rotation' ; 
         DATA.A = angle(P) ;
         DATA.dA = angle(cat(3,zeros(size(DX,1),1),P(:,:,2:end)./P(:,:,1:end-1))) ;
-        DATA.dAtot = cumsum(DATA.dA,3) ;
+        DATA.dAtot = cumsum(DATA.dA,3,'omitnan') ;
     % Curvature
-        iL = diag(sparse(1./DATA.L(:,1))) ;
+        iL = diag(sparse(1./L0)) ;
         if onNodes ; Dk = D*iL ; else ; Dk = D*b2n*iL ; end
         if size(Dk,2)==1 ; Dk = full(Dk) ; end
         DATA.Curvature = 'Curvature' ; 
@@ -928,7 +929,16 @@ methods
                 set(submenus,'callback',@(src,evt)obj.updateSeedMenus(src,ax)) ;
             % UserData in axes to choose the data to plot
                 ax.UserData.dataLabel = submenus(defMenu).Label ;
-                ax.UserData.plotType = 'Mesh' ;
+                switch size(obj.Elems,2)
+                    case 0 % points
+                            ax.UserData.plotType = 'Scatter' ;
+                    case 1 % points
+                            ax.UserData.plotType = 'Scatter' ;
+                    case 2 % edges
+                            ax.UserData.plotType = 'Edges' ;
+                    otherwise
+                            ax.UserData.plotType = 'Mesh' ;
+                end
                 ax.UserData.dataScale = 'Linear' ;
                 ax.UserData.clrMode = 'Preset' ;
                 ax.UserData.clrFramesLabel = 'Current' ;
@@ -1088,7 +1098,7 @@ methods
                                     % Set Color Limits
                                         CLim = min(max(avg+N*ec*[-1 1],minData),maxData) ;
                             end
-                            if range(CLim)<eps ; CLim = mean(abs(CLim))+[-1 1]*eps ; end
+                            if range(CLim)<eps ; CLim = mean(abs(CLim))+[-1 1]*sqrt(eps) ; end
                             if any(CLim~=caxis(ax)) ; caxis(ax,CLim) ; end
                     end
                 % Color Steps

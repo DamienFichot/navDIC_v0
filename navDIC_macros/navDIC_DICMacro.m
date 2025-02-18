@@ -3,12 +3,13 @@ classdef (Abstract) navDIC_DICMacro < navDIC_AbstractMacro
 
 properties
     % User-settable properties
-    Seed navDICSeed = navDICSeed.empty
-    RefFrame = 0
-    WeightPreviousImage double = 0
-    InitWithExistingData logical = true
-    UsePreviousVelocity logical = true
-    GaussianFilterSize double = 0 ;
+    Seed navDICSeed = navDICSeed.empty % the corresponding seed
+    RefFrame = 0 % reference frame number. if==0, tak the seed's ref frame
+    WeightPreviousImage double = 0 % refImg = (1-w)*refImg + w*prevImg
+    GaussianFilterSize double = 0 ; % image gaussian pre-filter
+    InitWithExistingData logical = true % initialize with the current seed's .MovingPoints
+    UsePreviousVelocity logical = true % add the previous motion to the initial guess
+    DispComp = 'both' ; % Estimated displacement components
     % Other properties
     RefImgs cell % the reference image(s)
 end
@@ -23,7 +24,7 @@ methods
     % Class destructor
     end
     
-    function hd = setup(this,hd)
+    function hd = setupUI(this,hd)
     % Setup the macro (change parameters, etc)
     % First, choose the seed
         if isempty(hd.Seeds) 
@@ -59,6 +60,7 @@ methods
                         ; 'Gaussian filter size' , num2str(this.GaussianFilterSize) ...
                         ; 'Initialize with existing data [0/1]' , num2str(this.InitWithExistingData) ...
                         ; 'Use the previous velocity [0/1]' , num2str(this.UsePreviousVelocity) ...
+                        ; 'Estimated displacement components [both/X/Y]' , this.DispComp ...
                     } ;
         out = inputdlg(...
                     defInputs(:,1) ...
@@ -69,23 +71,30 @@ methods
         if isempty(out) ; return ; end
         this.Name = out{1} ;
         this.Enable = str2num(out{2}) ;
-        switch str2num(out{3})
-            case 0 ; this.RefImgs = this.Seed.refImgs ;
-            otherwise ; this.RefImgs = hd.Images{this.Seed.CamIDs}(str2num(out{3})) ;
-        end
+        this.RefFrame = str2double(out{3}) ;
         this.WeightPreviousImage = str2num(out{4}) ;
         this.GaussianFilterSize = str2num(out{5}) ;
         this.InitWithExistingData = str2num(out{6}) ;
         this.UsePreviousVelocity = str2num(out{7}) ;
-    % Filter the reference image
+        this.DispComp = out{8} ;
+    % Setup the macro
+        hd = setup(this,hd) ;
+    end
+
+    function hd = setup(this,hd)
+    % Build the reference image
+        switch this.RefFrame
+            case 0 ; this.RefImgs = this.Seed.refImgs ;
+            otherwise ; this.RefImgs = hd.Images{this.Seed.CamIDs}(this.RefFrame) ;
+        end
         this.RefImgs = this.processImgs(this.RefImgs);
     end
 end
 
 methods (Abstract)
 % THESE METHODS NEED TO BE INSTANCIED BY SUBCLASSES
-    X = updateDIC(this,X,imgs) % Update the configuration X using DIC performed on imgs
-    I = transformImage(this,X,x,I) % Transform an image(s) I from configuration X to x
+    X = updateDIC(this,X,img,IMG) % Update the configuration X using DIC performed from current images "img" to references "IMG"
+    I = transformImage(this,I,x,X) % Transform the image(s) I from configuration X to x
 end
 
 methods (Sealed)
@@ -125,10 +134,10 @@ methods (Sealed)
         imgs = hd.Images{this.Seed.CamIDs}(CF) ;
         imgs = this.processImgs(imgs) ;
     % Update the DIC
-        X = updateDIC(this,X0,imgs) ;
+        X = this.updateDIC(X0,imgs,this.RefImgs) ;
     % Update the reference images if needed
         if this.WeightPreviousImage
-            imgs = transformImage(this,X0,X,imgs) ;
+            imgs = this.transformImage(imgs,X,X0) ;
             for ii = 1:numel(this.RefImgs)
                 this.RefImgs{ii} = this.RefImgs{ii}*(1-this.WeightPreviousImage) + imgs{ii}*this.WeightPreviousImage ;
             end
@@ -166,6 +175,55 @@ methods
         end
     end
 end
+
+%% IMAGE INTERPOLATION
+methods
+    function val = bilinearInterp(this,img,xx,extrapVal)
+    % Bilinear interpolation of an image at real-valued coordinates xx
+    % faster than gg = interp2(img,xx(:,1),xx(:,2),'linear') ;
+    % xx = [nValues 2] = [jj(:) ii(:)] ;
+    % with ii and jj resp. the (real-valued) row and column indices
+    % extrapVal: extrapolation value (default: NaN)
+
+        if nargin<4 ; extrapVal = NaN ; end
+
+        % Image informations
+        [nI,nJ,~] = size(img) ;
+
+        % Valid coordinates
+        valid = xx(:,1)<=nJ ...
+                & xx(:,1)>=1 ...
+                & xx(:,2)<=nI ...
+                & xx(:,2)>=1 ;
+
+        % Dummy values
+        xx(~valid,:) = 1 ;
+
+        % Integer part of the cordinates
+        ji = floor(xx) ;
+        ji(ji(:,1)==nJ,1) = nJ-1 ;
+        ji(ji(:,2)==nI,2) = nI-1 ;
+
+        % Neightboring pixels
+        p1 = ji(:,2)+nI*(ji(:,1)-1) ;
+        p2 = p1 + nI ; 
+        p3 = p2+1 ; 
+        p4 = p1+1 ;
+
+        % residual coordinates
+        dx = xx-ji ;
+
+        % bilinear interpolation
+        val = img(p1).*(1-dx(:,1)).*(1-dx(:,2)) ...
+            + img(p2).*dx(:,1).*(1-dx(:,2)) ...
+            + img(p3).*dx(:,1).*dx(:,2) ...
+            + img(p4).*(1-dx(:,1)).*dx(:,2) ;
+
+        % Non-valid values
+        val(~valid) = extrapVal ;
+    end
+end
+
 
 end
 

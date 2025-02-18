@@ -18,6 +18,11 @@ methods
     % Class destructor
     end
     
+    function hd = setupUI(this,hd)
+    % Setup the macro via its UI (change parameters, etc)
+        hd = setup(this,hd) % for backward compatibility
+    end
+    
     function hd = setup(this,hd)
     % Setup the macro (change parameters, etc)
     end
@@ -33,6 +38,12 @@ methods
 
     function hd = onFrameChange(this,hd)
     % Executed when the navDIC current frame changes (slider motion)
+    end
+end
+
+methods (Sealed=true)
+    function tf = eq(varargin)
+        tf = eq@handle(varargin{:});
     end
 end
 

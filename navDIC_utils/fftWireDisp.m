@@ -7,12 +7,12 @@ fig = clf('reset')  ;
 
 % Parameters
     camID = 1 ;
-    frames = 1:29000 ; 20000 ;
+    frames = 1:1000 ; hd.nFrames ; 20000 ;
     refFrame = 1 ;
     dimDisp = 1 ; % Dimension of the image to eval. displacements
     trunc = 10 ; % Truncation to limit high wavenumbers noise effect
     fit = 'TLS' ; % Phase fit: 'LS' or 'TLS'
-    U0 = 33 ;
+    U0 = size(hd.Images{camID}{1},1)/2 ;
 
 % Import Images
     IMG = cat(4,hd.Images{camID}{frames}) ;
@@ -51,7 +51,7 @@ fig = clf('reset')  ;
                 end
         end
         %disp([fr,pt]) ;
-        wtbr = waitbar(pt/size(IMG,2),wtbr,['Processing (',num2str(pt/size(IMG,2)*100,'%.1f'),' %)...']) ;
+        wtbr = waitbar(pt/size(IMG,2),wtbr,['Processing (',num2str(pt/size(IMG,2)*100,'%.1f'),' \%)...']) ;
     end
     delete(wtbr) ;
     U = real(1i*log(Z))*size(IMG,1)/2/pi ;
@@ -89,7 +89,6 @@ fig = clf('reset')  ;
     
     
 
-
 %% HARMONIC REGIME
     
     Fi = 20000 ;
@@ -98,16 +97,16 @@ fig = clf('reset')  ;
     
     fig = clf('reset')  ;
     ax = gobjects(0) ;
-    ax(1) = subplot(2,1,1) ;
+    ax(1) = mysubplot(2,1,1) ;
         plot(f,sqrt(mean(abs(tfU).^2,1)),'k') ;
             set(gca,'xscale','log','yscale','log') ;
             set(gca,'xlim',[f(2) Fi/2])
             grid on
         line = plot(f(2)*[1 1],get(gca,'ylim'),':r') ;
-    ax(2) = subplot(2,1,2) ;
+    ax(2) = mysubplot(2,1,2) ;
         pl = plot(real(tfU(:,2)),'k') ;
         
-    indX = @()dsearchn(f(:),ax(1).CurrentPoint(1,1)) ;
+    indX = @()closest(f,ax(1).CurrentPoint(1,1)) ;
     fig.WindowButtonMotionFcn = [...
             'set(line,''XData'',f(indX())*[1 1])' ...
             ,', set(pl,''YData'',real(tfU(:,indX())))'
@@ -116,35 +115,36 @@ fig = clf('reset')  ;
                             
 %% APPLY ESPRIT (EXTRACT WAVENUMBERS)
 
-    R0 = 1:2 ;
+    R0 = 1;%:2 ;
     FUNC = 'cos' ;
-    CRITERION = 'SAMOS' ;
-    compute_dK = true ;
+    CRITERION = 'ESTER' ;
+    compute_dK = false ;
     indF = 2:numel(f)/2 ; hd.nFrames ; 10000 ;
+    indX = 100:size(tfU,1)-100 ;
     
     K = ones(length(indF),max(R0))*NaN ;
     dK = ones(length(indF),max(R0))*NaN ;
     A = ones(length(indF),max(R0))*NaN ;
     for ff = 1:length(indF)
-        out = ESPRIT_fcn(tfU(:,indF(ff)),1,'R0',R0,'CRITERION',CRITERION,'FUNC',FUNC,'COMPUTE_dK',compute_dK,'COMPUTE_U',true) ;
+        out = ESPRIT_fcn(tfU(indX,indF(ff)),1,'R0',R0,'CRITERION',CRITERION,'FUNC',FUNC,'COMPUTE_dK',compute_dK,'COMPUTE_U',true) ;
         nk = length(out.K) ;
         K(ff,1:nk) = out.K ;
-        dK(ff,1:nk) = out.dK ;
+        if compute_dK ; dK(ff,1:nk) = out.dK ; end
         A(ff,1:nk) = out.U ;
         ff
     end
     
 %% Plot the result
 
-    gammaMin = 1e-3 ;
+    gammaMin = 1e-4 ;
     gammaMax = 1e-1 ;
-    dKmax = 1e-4 ;
-    relAmin = 1e-2 ;
-    res = 1260/.42 ; 6000 ; % pix/m
+    dKmax = 1e-3 ;
+    relAmin = 5e-3 ;
+    res = 1260/.42;%6000 ; % pix/m
 
     F = reshape(f(indF),[],1)*ones(1,max(R0)) ;
     gamma = abs(imag(K)./real(K)) ;
-    normU = sqrt(sum(abs(tfU(:,indF)).^2,1)) ;
+    normU = sqrt(sum(abs(tfU(indX,indF)).^2,1)) ;
     relA = A./normU(:) ;
     
     valid = true(size(K)) ; valid = valid(:) ;
@@ -155,13 +155,14 @@ fig = clf('reset')  ;
     
     fig = clf('reset') ;
         ax = gobjects(0) ;
-        ax(1) = subplot(2,1,1) ;
+        ax(1) = mysubplot(2,1,1) ;
             plot(F(valid),2*pi*F(valid)./abs(real(K(valid)))/res,'.k','tag','experimental') ;
+            %plot(F(valid),abs(real(K(valid)))*res,'.k','tag','experimental') ;
             %scatter(F(valid),2*pi*F(valid)./abs(real(K(valid))),2,log10(abs(gamma(valid)))) ; colorbar
             set(gca,'yscale','log')
             grid on
             set(gca,'xscale','log')
-        ax(2) = subplot(2,1,2) ;
+        ax(2) = mysubplot(2,1,2) ;
             plot(F(valid),gamma(valid),'.k') ;
             set(gca,'yscale','log')
             grid on
@@ -179,11 +180,10 @@ save([path,file],'Fi','U','K')
 
 %% THEORETICAL PREDICTIONS
 
-E = 2,7e9; 3.8e9 ; 5e9; 
-rho = 1150 ; 1300;
-m = 240e-3;
-N = m*9.81 ; 2.25 ;
+E = 5e9 ; 2.8e9 ;
+N = 210e-3*9.81 ; 2.25 ;
 D = .6e-3 ;
+rho = 1150 ; 345e-6/(pi*D^2/4*.99) ;
 
 S = pi*(D/2)^2 ;
 I = pi*D^4/64 ;
